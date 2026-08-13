@@ -486,6 +486,15 @@ chat.addEventListener('click', e => {
 // ---------- answer ----------
 const PAGE = 8;
 function answer(raw) {
+  // 여러 모델이 든 문의(견적 요청 등) 자동 인식: 모델코드 2개 이상이면 모델별로 차례로 답변
+  const codes = [...new Set((String(raw).toUpperCase().match(/[A-Z]{2,5}\s*-\s*[A-Z0-9]{3,10}/g) || [])
+    .map(c => c.replace(/\s/g, '')))];
+  if (codes.length >= 2) {
+    addMsg('문의에서 모델 <b>' + codes.length + '개</b>를 찾았어요: ' + codes.map(esc).join(', ') + '\n모델별 수수료를 차례로 보여드릴게요. (약정 연수는 각 표의 <span class="term">약정</span> 컬럼에서 확인)', 'bot');
+    for (const c of codes) answer(c + ' 수수료');
+    return;
+  }
+
   const { toks, sheets, intent } = parseQuery(raw);
 
   if (intent.comp) {
