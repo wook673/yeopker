@@ -43,6 +43,15 @@ tr.detail td{white-space:normal;background:#fbfdfb;font-size:12px;color:var(--su
 .fee{color:var(--fee);font-weight:700}
 .rent{color:var(--rent)}
 .term{color:var(--termc);font-weight:600;white-space:nowrap}
+/* 수수료표 전용: 숫자 우측 정렬, 컬럼 성격별 색 구분, 약정 뱃지 */
+td.num{text-align:right}
+td.fee{font-size:12.5px;background:rgba(208,48,48,.045)}
+th.h-fee{color:var(--fee);background:#fbeeee;text-align:right;border-left:1px solid var(--line)}
+th.h-rent{color:var(--rent);background:#ecf3f8;text-align:right}
+th.h-term{color:var(--termc)}
+tr.click:hover td.fee{background:rgba(208,48,48,.09)}
+.badge{display:inline-block;background:#e4f1ea;color:var(--termc);border:1px solid #c8e0d3;border-radius:11px;padding:1.5px 8px;font-size:11.5px;font-weight:700;line-height:1.5}
+tbody tr:nth-child(even) td.fee, table tr:nth-child(even) td.fee{background:rgba(208,48,48,.07)}
 .sheetnote{margin:7px 0 5px;padding:9px 11px;background:#fdf6e3;border:1px solid #f0dfae;border-left:3px solid #e2a93b;border-radius:9px;font-size:12px;line-height:1.65;color:#7a5518}
 .apply{margin:5px 5px 0 0;font-size:12px;font-weight:600;font-family:inherit;background:#fff;border:1px solid var(--primary);color:var(--primary);border-radius:16px;padding:6px 12px;cursor:pointer;transition:background .15s,color .15s}
 .apply:hover{background:var(--primary);color:#fff}
@@ -378,17 +387,20 @@ function renderGroup(s, idxs, intent, limit) {
   if (SHEET_NOTES[s]) h += '<div class="sheetnote">' + SHEET_NOTES[s] + '</div>';
   h += '<div class="tblwrap"><table><tr>';
   for (const c of nameCols) h += '<th>' + esc(H[c]) + '</th>';
-  for (const c of termCols) h += '<th>' + esc(H[c]) + '</th>';
-  for (const c of valCols) h += '<th>' + esc(H[c]) + '</th>';
+  for (const c of termCols) h += '<th class="h-term">' + esc(H[c]) + '</th>';
+  for (const c of valCols) h += '<th class="' + (m.fee.includes(c) ? 'h-fee' : 'h-rent') + '">' + esc(H[c]) + '</th>';
   h += '</tr>';
   for (const ri of shown) {
     const r = rows[ri];
     h += '<tr class="click" data-s="' + esc(s) + '" data-i="' + ri + '">';
     for (const c of nameCols) h += '<td>' + esc(r[c] || '-') + '</td>';
-    for (const c of termCols) h += '<td class="term">' + esc(fmtTerm(H[c], r[c] || '-')) + '</td>';
+    for (const c of termCols) {
+      const tv = esc(fmtTerm(H[c], r[c] || '-'));
+      h += '<td class="term">' + (r[c] ? '<span class="badge">' + tv + '</span>' : '-') + '</td>';
+    }
     for (const c of valCols) {
       const cls = m.fee.includes(c) ? 'fee' : 'rent';
-      h += '<td class="' + cls + '">' + esc(fmt(r[c] || '-')) + '</td>';
+      h += '<td class="num ' + cls + '">' + esc(fmt(r[c] || '-')) + '</td>';
     }
     h += '</tr>';
   }
