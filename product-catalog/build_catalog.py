@@ -402,7 +402,7 @@ footer .date { font-family:var(--mono); font-variant-numeric:tabular-nums; white
       <div class="field f-sub"><select id="subSel"><option value="">전체 하위분류</option></select></div>
       <div class="field search">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="q" type="search" placeholder="제품명·모델명 검색 (예: 정수기, 삼성, WD723)">
+        <input id="q" type="search" placeholder="검색 (예: 코웨이 비데, 삼성 정수기, WD723)">
       </div>
       <span id="count"></span>
     </div>
@@ -442,15 +442,27 @@ function refreshSubs() {
 function norm(s) { return (s||'').toLowerCase().replace(/\\s+/g,''); }
 function esc(s) { return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
+// 브랜드 표기 별칭: 어느 쪽으로 검색해도 매칭
+const ALIAS = {
+  'lg':['엘지'], '엘지':['lg'],
+  'samsung':['삼성'], '삼성':['samsung'],
+  'coway':['코웨이'], '코웨이':['coway'],
+  '쿠쿠':['ckoo','cuckoo'], 'ckoo':['쿠쿠'], 'cuckoo':['쿠쿠','ckoo'],
+};
+
 function collect() {
-  const kw = norm(q.value);
+  // 공백 기준 토큰 AND 검색: "코웨이 비데" → 코웨이 AND 비데 (이름·모델·카테고리명 대상)
+  const kws = (q.value||'').toLowerCase().split(/\\s+/).filter(Boolean).map(norm);
   const out = [];
   for (const r of DATA) {
     if (rootSel.value && r.root !== rootSel.value) continue;
     for (const s of r.subcategories) {
       if (subSel.value && (s.category || s.name) !== subSel.value) continue;
       for (const p of s.products) {
-        if (kw && !norm(p.name).includes(kw) && !norm(p.model).includes(kw)) continue;
+        if (kws.length) {
+          const hay = norm(p.name) + '\\u0000' + norm(p.model) + '\\u0000' + norm(r.name) + '\\u0000' + norm(s.name);
+          if (!kws.every(k => hay.includes(k) || (ALIAS[k] || []).some(a => hay.includes(a)))) continue;
+        }
         out.push({...p, _root:r.name, _sub:s.name});
       }
     }
