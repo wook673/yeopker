@@ -52,6 +52,21 @@ th.h-term{color:var(--termc)}
 tr.click:hover td.fee{background:rgba(208,48,48,.09)}
 .badge{display:inline-block;background:#e4f1ea;color:var(--termc);border:1px solid #c8e0d3;border-radius:11px;padding:1.5px 8px;font-size:11.5px;font-weight:700;line-height:1.5}
 tbody tr:nth-child(even) td.fee, table tr:nth-child(even) td.fee{background:rgba(208,48,48,.07)}
+/* 모델 묶음 카드 (피벗) */
+.mcard{margin:9px 0;padding:10px 11px;background:var(--soft-2);border:1px solid var(--line);border-radius:12px}
+.mcard .mhead{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.mcard .mmodel{font-weight:800;font-size:14px;color:var(--ink);letter-spacing:-.01em}
+.mcard .mtitle{font-size:12.5px;color:var(--sub);font-weight:600}
+.mcard .mcnt{margin-left:auto;font-size:11px;color:var(--sub);background:#fff;border:1px solid var(--line);border-radius:10px;padding:1px 8px}
+.mcard .tblwrap{background:#fff}
+.mcard td.rk{font-size:11.5px;color:var(--termc);font-weight:600;white-space:nowrap;background:var(--soft)}
+.mcard td.pvc{cursor:pointer}
+.mcard td.pvc:hover{background:var(--soft)}
+.mcard td.pvc .fee{display:block;line-height:1.35}
+.mcard .pvr{display:block;font-size:10.5px;color:var(--rent);line-height:1.3}
+.mcard .pvmore{font-size:10px;font-weight:700;color:#fff;background:var(--primary-2);border-radius:8px;padding:0 5px;vertical-align:1px}
+.mcard .catbox{margin:0 0 7px}
+.mcard .pvdetail{margin-top:7px;padding:8px 10px;background:#fff;border:1px dashed var(--line-strong);border-radius:8px;font-size:12px;color:var(--sub);line-height:1.7}
 .sheetnote{margin:7px 0 5px;padding:9px 11px;background:#fdf6e3;border:1px solid #f0dfae;border-left:3px solid #e2a93b;border-radius:9px;font-size:12px;line-height:1.65;color:#7a5518}
 .apply{margin:5px 5px 0 0;font-size:12px;font-weight:600;font-family:inherit;background:#fff;border:1px solid var(--primary);color:var(--primary);border-radius:16px;padding:6px 12px;cursor:pointer;transition:background .15s,color .15s}
 .apply:hover{background:var(--primary);color:#fff}
@@ -383,13 +398,103 @@ function fmtTerm(h, v) {
   return v;
 }
 
+// ---------- 같은 모델 묶어보기 (피벗 카드) ----------
+// 약정이 행으로 반복되는 시트(코웨이·SK 등)는 모델당 카드 1장 + 약정 매트릭스로,
+// 이미 모델 1행 구조인 시트(이니·라온30 등)는 기존 표 그대로.
+let RG_TOTAL = 0, RG_UNIT = '건';
+
+function pivotPlan(s, idxs) {
+  const H = DATA[s].headers, rows = DATA[s].rows, m = META[s];
+  if (!m.fee.length) return null;
+  const modelCol = H.findIndex(hd => /모델/.test(hd));
+  if (modelCol < 0) return null;
+  const axisCol = m.term.find(c => /약정|렌탈기간|총렌탈기간|규정/.test(H[c]));
+  if (axisCol === undefined) return null;
+  const axSet = [];
+  for (const ri of idxs) {
+    const v = String(rows[ri][axisCol] || '').trim();
+    if (v && !axSet.includes(v)) axSet.push(v);
+  }
+  if (!axSet.length || axSet.length > 10) return null;
+  const map = new Map();
+  for (const ri of idxs) {
+    const key = String(rows[ri][modelCol] || '').trim() || '(모델 미기재)';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(ri);
+  }
+  const groups = [...map.entries()].map(([model, list]) => ({ model, list }));
+  if (idxs.length / groups.length < 2) return null;   // 모델당 평균 2행 미만이면 기존 표가 낫다
+  return { groups, modelCol, axisCol, rowCols: m.term.filter(c => c !== axisCol) };
+}
+
+function renderModelCard(s, g, pv, intent) {
+  const H = DATA[s].headers, rows = DATA[s].rows, m = META[s];
+  const first = rows[g.list[0]];
+  const allName = m.name.filter(c => c !== pv.modelCol && !m.fee.includes(c) && !m.rent.includes(c) && !m.term.includes(c));
+  // 그룹 안에서 값이 갈리는 이름 컬럼(관리구분: 셀프/방문 등)은 제목이 아니라 행 라벨로
+  const varies = allName.filter(c => new Set(g.list.map(ri => String(rows[ri][c] || '').trim())).size > 1).slice(0, 2);
+  const nameCols = allName.filter(c => !varies.includes(c)).slice(0, 3);
+  const title = nameCols.map(c => String(first[c] || '').trim()).filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+  const axes = [];
+  for (const ri of g.list) {
+    const v = String(rows[ri][pv.axisCol] || '').trim();
+    if (v && !axes.includes(v)) axes.push(v);
+  }
+  const rkOf = ri => varies.map(c => String(rows[ri][c] || '').trim().slice(0, 24))
+    .concat(pv.rowCols.map(c => fmtTerm(H[c], String(rows[ri][c] || '').trim())))
+    .filter(v => v && v !== '-').join(' · ') || '기본';
+  const rkeys = [], cell = {};
+  for (const ri of g.list) {
+    const rk = rkOf(ri);
+    if (!rkeys.includes(rk)) rkeys.push(rk);
+    const ax = String(rows[ri][pv.axisCol] || '').trim();
+    ((cell[rk] = cell[rk] || {})[ax] = cell[rk][ax] || []).push(ri);   // 겹치는 행도 보존
+  }
+  const feeCol = m.fee[0], rentCol = m.rent.length ? m.rent[0] : undefined;
+  let h = '<div class="mcard">';
+  h += '<div class="mhead"><span class="mmodel">' + esc(g.model) + '</span>' + (title ? '<span class="mtitle">' + esc(title) + '</span>' : '') + '<span class="mcnt">' + g.list.length + '개 조건</span></div>';
+  h += catBox(s, first);
+  h += '<div class="tblwrap"><table class="pivot"><tr><th></th>';
+  for (const ax of axes) h += '<th class="h-term">' + esc(fmtTerm(H[pv.axisCol], ax)) + '</th>';
+  h += '</tr>';
+  for (const rk of rkeys) {
+    h += '<tr><td class="rk">' + esc(rk) + '</td>';
+    for (const ax of axes) {
+      const ris = (cell[rk] || {})[ax];
+      if (!ris) { h += '<td class="num">-</td>'; continue; }
+      const r = rows[ris[0]];
+      const rent = rentCol !== undefined && r[rentCol] ? fmt(r[rentCol]) : '';
+      h += '<td class="num pvc" data-s="' + esc(s) + '" data-i="' + ris.join(',') + '">'
+        + '<span class="fee">' + esc(fmt(r[feeCol] || '-'))
+        + (ris.length > 1 ? ' <span class="pvmore">+' + (ris.length - 1) + '</span>' : '') + '</span>'
+        + (rent ? '<span class="pvr">' + esc(rent) + '</span>' : '') + '</td>';
+    }
+    h += '</tr>';
+  }
+  h += '</table></div>';
+  h += '<div class="note" style="margin-top:4px">칸 위 <span class="fee">수수료</span>' + (rentCol !== undefined ? ' · 아래 <span class="rent">렌탈료</span>' : '') + ' — 칸을 누르면 상세정보</div>';
+  h += '</div>';
+  return h;
+}
+
 function renderGroup(s, idxs, intent, limit) {
+  let h = '<div class="grp">▸ ' + esc(s) + ' (' + idxs.length.toLocaleString() + '건)</div>';
+  if (SHEET_NOTES[s]) h += '<div class="sheetnote">' + SHEET_NOTES[s] + '</div>';
+  const pv = pivotPlan(s, idxs);
+  if (pv) {
+    RG_TOTAL = pv.groups.length; RG_UNIT = '모델';
+    return h + pv.groups.slice(0, limit).map(g => renderModelCard(s, g, pv, intent)).join('');
+  }
+  RG_TOTAL = idxs.length; RG_UNIT = '건';
+  return h + renderFlat(s, idxs, intent, limit);
+}
+
+function renderFlat(s, idxs, intent, limit) {
   const H = DATA[s].headers, rows = DATA[s].rows, m = META[s];
   const { nameCols, termCols, valCols } = pickCols(s, intent);
   const shown = idxs.slice(0, limit);
-  let h = '<div class="grp">▸ ' + esc(s) + ' (' + idxs.length.toLocaleString() + '건)</div>';
-  if (SHEET_NOTES[s]) h += '<div class="sheetnote">' + SHEET_NOTES[s] + '</div>';
-  h += '<div class="tblwrap"><table><tr>';
+  let h = '<div class="tblwrap"><table><tr>';
   for (const c of nameCols) h += '<th>' + esc(H[c]) + '</th>';
   for (const c of termCols) h += '<th class="h-term">' + esc(H[c]) + '</th>';
   for (const c of valCols) h += '<th class="' + (m.fee.includes(c) ? 'h-fee' : 'h-rent') + '">' + esc(H[c]) + '</th>';
@@ -487,6 +592,16 @@ chat.addEventListener('click', e => {
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fallback);
     else fallback();
+    return;
+  }
+  const pc = e.target.closest('td.pvc');
+  if (pc) {
+    const card = pc.closest('.mcard');
+    let d = card.querySelector('.pvdetail');
+    if (d && d.dataset.i === pc.dataset.i) { d.remove(); return; }
+    if (!d) { d = document.createElement('div'); d.className = 'pvdetail'; card.appendChild(d); }
+    d.dataset.i = pc.dataset.i;
+    d.innerHTML = pc.dataset.i.split(',').map(i => rowDetail(pc.dataset.s, +i)).join('<hr style="border:none;border-top:1px dashed #ccc;margin:6px 0">');
     return;
   }
   const tr = e.target.closest('tr.click');
@@ -591,8 +706,8 @@ function answer(raw) {
     let h = head;
     for (const s of sheetNames) {
       h += renderGroup(s, bySheet[s], intent, state.limits[s]);
-      if (bySheet[s].length > state.limits[s]) {
-        h += '<button class="more" data-sheet="' + esc(s) + '">' + esc(s) + ' 더보기 (+' + (bySheet[s].length - state.limits[s]).toLocaleString() + '건)</button>';
+      if (RG_TOTAL > state.limits[s]) {
+        h += '<button class="more" data-sheet="' + esc(s) + '">' + esc(s) + ' 더보기 (+' + (RG_TOTAL - state.limits[s]).toLocaleString() + RG_UNIT + ')</button>';
       }
     }
     msg.innerHTML = h;
