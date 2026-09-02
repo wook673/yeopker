@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>옆커렌탈 수수료 챗봇</title>
+<title>다니엘 렌탈 수수료 챗봇</title>
 <style>
 :root{
   --bg:#eef1ee;--card:#ffffff;--ink:#182420;--sub:#68766e;--line:#e2e8e3;--line-strong:#d5ddd7;
@@ -111,7 +111,7 @@ a.kakao:hover{filter:brightness(1.04)}
 <header>
   <div class="hwrap">
     <div class="logo">렌</div>
-    <div><h1>옆커렌탈 수수료 챗봇</h1><div class="sub" id="stats">데이터 로딩중…</div></div>
+    <div><h1>다니엘 렌탈 수수료 챗봇</h1><div class="sub" id="stats">데이터 로딩중…</div></div>
   </div>
 </header>
 <div id="chat"></div>
@@ -580,7 +580,7 @@ chat.addEventListener('click', e => {
   const cp = e.target.closest('button.copybtn');
   if (cp) {
     const box = cp.closest('.msg');
-    const lines = ['[옆커렌탈 접수] ' + cp.dataset.type];
+    const lines = ['[다니엘 렌탈 접수] ' + cp.dataset.type];
     box.querySelectorAll('[data-f]').forEach(el => lines.push(el.dataset.f + ': ' + el.value.trim()));
     const txt = lines.join('\n');
     const done = () => { cp.textContent = '✅ 복사 완료! 카카오톡에 붙여넣어 주세요'; };

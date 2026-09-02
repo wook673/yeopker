@@ -1,6 +1,6 @@
-# 옆커렌탈
+# 다니엘 렌탈
 
-- `index.html` — 수수료 챗봇 (렌탈사별 수수료 검색 · 약정별 비교 · 사업자 접수)
+- `index.html` — 다니엘 렌탈 수수료 챗봇 (렌탈사별 수수료 검색 · 약정별 비교 · 사업자 접수)
 - `product-catalog/catalog.html` — 제품 카탈로그 (내부용, 수수료 확인 버튼 포함)
 - `product-catalog/catalog_customer.html` — 제품 카탈로그 (고객용)
 
