@@ -193,17 +193,22 @@ const SHEET_NOTES = {
 };
 
 // ---------- search index ----------
+// 시트별 검색 힌트: 원본이 마케팅명을 안 쓰는 시트에 브랜드 검색어를 부여 (표시에는 안 나옴)
+const SHEET_SEARCH_HINT = {
+  'LG정수기': ' 퓨리케어 오브제컬렉션 lg정수기',
+};
 const INDEX = [];
 for (const s of SHEETS) {
   const rows = DATA[s].rows;
+  const hint = SHEET_SEARCH_HINT[s] || '';
   for (let i = 0; i < rows.length; i++) {
     let extra = '';
     for (const c of rows[i]) {
       const d = decodeRule(c);
       if (d) extra += ' ' + d.full;   // '청호 신규', '청호 타사보상' 등으로 검색 가능
     }
-    const t = (s + ' ' + rows[i].join(' ') + extra).toLowerCase();
-    INDEX.push({ s, i, t, z: t.replace(/\s+/g, '') });   // z: 공백 제거본 (붙여쓰기 검색용)
+    const t = (s + ' ' + rows[i].join(' ') + extra + hint).toLowerCase();
+    INDEX.push({ s, i, t, z: t.replace(/[\s\/]+/g, '') });   // z: 공백·슬래시 제거본 ('냉온정'↔'냉/온/정' 매칭)
   }
 }
 
@@ -293,7 +298,7 @@ function parseQuery(raw) {
 // ---------- search ----------
 function tokenMatch(e, tk) {
   // 일반 부분일치 + 공백 무시 일치 ('삼성에어컨' == '삼성 에어컨')
-  return e.t.includes(tk) || e.z.includes(tk.replace(/\s+/g, ''));
+  return e.t.includes(tk) || e.z.includes(tk.replace(/[\s\/]+/g, ''));
 }
 
 function splitToken(tk, pool) {
@@ -419,7 +424,7 @@ function pivotPlan(s, idxs) {
   if (!m.fee.length) return null;
   const modelCol = H.findIndex(hd => /모델/.test(hd));
   if (modelCol < 0) return null;
-  const axisCol = m.term.find(c => /약정|렌탈기간|총렌탈기간|규정/.test(H[c]));
+  const axisCol = m.term.find(c => /약정|렌탈기간|총렌탈기간|규정|계약|의무/.test(H[c]));
   if (axisCol === undefined) return null;
   const axSet = [];
   for (const ri of idxs) {
