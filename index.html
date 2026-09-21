@@ -206,6 +206,10 @@ for (const s of SHEETS) {
     for (const c of rows[i]) {
       const d = decodeRule(c);
       if (d) extra += ' ' + d.full;   // '청호 신규', '청호 타사보상' 등으로 검색 가능
+      if (typeof c === 'string' && c.indexOf('(') >= 0) {
+        const mv = expandModelVariants(c);
+        if (mv.length) extra += ' ' + mv.join(' ');   // 'WD120M(C/N)B' -> WD120MCB WD120MNB 검색 가능
+      }
     }
     const t = (s + ' ' + rows[i].join(' ') + extra + hint).toLowerCase();
     INDEX.push({ s, i, t, z: t.replace(/[\s\/]+/g, '') });   // z: 공백·슬래시 제거본 ('냉온정'↔'냉/온/정' 매칭)
@@ -431,7 +435,14 @@ function pivotPlan(s, idxs) {
     const v = String(rows[ri][axisCol] || '').trim();
     if (v && !axSet.includes(v)) axSet.push(v);
   }
-  if (!axSet.length || axSet.length > 10) return null;
+  if (!axSet.length) return null;
+  // 약정명 변형이 많으면('3년약정_타사보상' 등) '_' 앞부분만 축으로 쓰고 꼬리는 행 하위분류로
+  let axSplit = false;
+  if (axSet.length > 10) {
+    const bases = [...new Set(axSet.map(v => v.split('_')[0].trim()))];
+    if (bases.length > 10) return null;
+    axSplit = true;
+  }
   const map = new Map();
   for (const ri of idxs) {
     const key = String(rows[ri][modelCol] || '').trim() || '(모델 미기재)';
@@ -440,7 +451,7 @@ function pivotPlan(s, idxs) {
   }
   const groups = [...map.entries()].map(([model, list]) => ({ model, list }));
   if (idxs.length / groups.length < 2) return null;   // 모델당 평균 2행 미만이면 기존 표가 낫다
-  return { groups, modelCol, axisCol, rowCols: m.term.filter(c => c !== axisCol) };
+  return { groups, modelCol, axisCol, axSplit, rowCols: m.term.filter(c => c !== axisCol) };
 }
 
 function renderModelCard(s, g, pv, intent) {
@@ -452,20 +463,40 @@ function renderModelCard(s, g, pv, intent) {
   const nameCols = allName.filter(c => !varies.includes(c)).slice(0, 3);
   const title = nameCols.map(c => String(first[c] || '').trim()).filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+  const axOf = ri => { const v = String(rows[ri][pv.axisCol] || '').trim(); return pv.axSplit ? v.split('_')[0].trim() : v; };
+  const axSufOf = ri => pv.axSplit ? String(rows[ri][pv.axisCol] || '').split('_').slice(1).join('_').trim() : '';
   const axes = [];
   for (const ri of g.list) {
-    const v = String(rows[ri][pv.axisCol] || '').trim();
+    const v = axOf(ri);
     if (v && !axes.includes(v)) axes.push(v);
   }
-  const rkOf = ri => varies.map(c => String(rows[ri][c] || '').trim().slice(0, 24))
+  // 약정 연/개월 숫자가 있으면 오름차순 정렬 (계약4년 → 5년 → 6년)
+  if (axes.length > 1 && axes.every(a => /\d+/.test(a))) {
+    axes.sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
+  }
+  // 결합여부(단품/신규/기존) 컬럼: 헤더에 '결합'이 있고 값이 실제 단품/신규/기존 계열일 때만 하위분류 축으로 사용
+  let bondCol = -1;
+  for (let c = 0; c < H.length; c++) {
+    if (!/결합/.test(H[c]) || m.fee.includes(c) || m.rent.includes(c)) continue;
+    const vals = g.list.map(ri => String(rows[ri][c] || '').trim()).filter(Boolean);
+    if (vals.length && vals.filter(v => /단품|신규|기존/.test(v)).length / vals.length > 0.5) { bondCol = c; break; }
+  }
+  const bondOf = v => { v = String(v).trim(); if (v.indexOf('단품') >= 0) return '단품'; if (v.indexOf('신규') >= 0) return '신규'; if (v.indexOf('기존') >= 0) return '기존'; return v.slice(0, 12); };
+  const rkOf = ri => (bondCol >= 0 && rows[ri][bondCol] ? [bondOf(rows[ri][bondCol])] : [])
+    .concat(axSufOf(ri) ? [axSufOf(ri)] : [])
+    .concat(varies.map(c => String(rows[ri][c] || '').trim().slice(0, 24)))
     .concat(pv.rowCols.map(c => fmtTerm(H[c], String(rows[ri][c] || '').trim())))
     .filter(v => v && v !== '-').join(' · ') || '기본';
   const rkeys = [], cell = {};
   for (const ri of g.list) {
     const rk = rkOf(ri);
     if (!rkeys.includes(rk)) rkeys.push(rk);
-    const ax = String(rows[ri][pv.axisCol] || '').trim();
+    const ax = axOf(ri);
     ((cell[rk] = cell[rk] || {})[ax] = cell[rk][ax] || []).push(ri);   // 겹치는 행도 보존
+  }
+  if (bondCol >= 0) {
+    const bord = k => { const i = ['단품', '신규', '기존'].findIndex(b => k.indexOf(b) === 0); return i < 0 ? 9 : i; };
+    rkeys.sort((a, b) => bord(a) - bord(b));   // 단품 → 신규 → 기존 순서 고정
   }
   const feeCol = m.fee[0], rentCol = m.rent.length ? m.rent[0] : undefined;
   let h = '<div class="mcard">';
@@ -552,13 +583,23 @@ const CATALOG = (() => {
 const CAT_IMG = 'https://tlpcserver.imakeweb.co.kr/data/goods/';
 const CAT_VIEW = 'https://tlpcserver.imakeweb.co.kr/kor/mall/view.asp?goodscode=';
 
+// 'WD120M(C/N)B' 같은 괄호 변형 표기를 실제 모델코드 목록으로 전개 (WD120MCB, WD120MNB)
+function expandModelVariants(v) {
+  const s = String(v).split('\n')[0].trim();
+  const m = s.match(/^([A-Za-z0-9-]+)\(([A-Za-z0-9\/]+)\)([A-Za-z0-9-]*)$/);
+  if (!m) return [];
+  return m[2].split('/').map(p => m[1] + p + m[3]);
+}
+
 function catBox(s, r) {
   const H = DATA[s].headers;
   let hit = null;
   for (let i = 0; i < H.length && !hit; i++) {
     if (!/모델/.test(H[i]) || !r[i]) continue;
-    for (const piece of String(r[i]).split(/[\/+]/)) {
-      const k = piece.replace(/\s+/g, '').toUpperCase();
+    const raw = String(r[i]).split('\n')[0];
+    const cands = expandModelVariants(raw).concat(raw.split(/[\/+]/));
+    for (const piece of cands) {
+      const k = String(piece).replace(/\s+/g, '').toUpperCase();
       if (CATALOG[k]) { hit = CATALOG[k]; break; }
     }
   }
