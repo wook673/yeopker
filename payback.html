@@ -606,7 +606,7 @@ function catBox(s, r) {
   }
   if (!hit) return '';
   return '<div class="catbox">'
-    + (hit[0] ? '<img loading="lazy" src="' + esc(CAT_IMG + hit[0]) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+    + (hit[0] ? '<img src="' + esc(CAT_IMG + hit[0]) + '" alt="" onerror="this.style.display=\'none\'">' : '')
     + '<div class="catinfo">' + (hit[2] ? '쇼핑몰 ' + esc(hit[2]) : '카탈로그 등록 제품') + '</div>'
     + '<a href="' + esc(CAT_VIEW + hit[1]) + '" target="_blank" rel="noopener">🛒 상품페이지</a></div>';
 }
