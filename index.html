@@ -108,6 +108,7 @@ a.kakao:hover{filter:brightness(1.04)}
 .note{font-size:11.5px;color:var(--sub);margin-top:7px;line-height:1.6}
 .bubble .highlight,.highlight{color:var(--fee);font-weight:700}
 /* 직원용 접수양식 */
+.formtxt{background:var(--soft-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.7;white-space:pre-wrap;user-select:all}
 .appform .sec{grid-column:1/-1;margin-top:9px;padding-bottom:4px;border-bottom:1px solid var(--line);font-weight:800;font-size:12.5px;color:var(--primary)}
 .appform .sec .note{display:inline;font-weight:500;margin:0}
 .appform select{border:1px solid var(--line-strong);border-radius:9px;padding:8px 10px;font-size:13px;width:100%;font-family:inherit;background:#fff;outline:none}
@@ -726,7 +727,27 @@ function productInfo(s, ri) {
     halfMonths, halfPrice: (() => { const hp = halfCol !== undefined ? numOf(r[halfCol]) : null; const base = opts.length ? opts[0].rent : null; return hp && base && hp < base ? hp : null; })(), promo };
 }
 
+// 접수양식 작성: 상품 정보 4칸만 채운 텍스트 양식으로 답변
 function openForm(s, ri) {
+  const p = productInfo(s, ri);
+  const H = DATA[s].headers, r = DATA[s].rows[ri];
+  const mc = H.findIndex(h => /모델/.test(h));
+  const mlines = mc >= 0 ? String(r[mc] || '').split('\n').map(x => x.trim()).filter(Boolean) : [];
+  // 색상 변형이 있으면 '모델코드 + 색상' 그대로 보여줌 (예: WD724R(K/H/E) 블랙/화이트/베이지)
+  let model = p.model;
+  if (p.colors.length && expandModelVariants(mlines[0] || '').length) model = mlines.slice(0, 2).join(' ');
+  else if (p.colors.length) model = p.colors.map(c => c.code).join(' / ');
+  const rent = p.opts.length === 1 ? won(p.opts[0].rent)
+    : p.opts.map(o => (o.extra ? o.extra + (/선납/.test(o.label) ? ' ' + ((o.label.match(/\d0%\s*선납/) || ['선납'])[0]) : '') : o.label) + ' ' + won(o.rent)).join(' / ');
+  const txt = [
+    '성명: ', '연락처: ', '생년월일: ', '주소: ', '은행/카드사: ', '계좌/카드번호: ', '유효기간: -',
+    '제품명: ' + p.name, '모델명: ' + model, '렌탈료: ' + rent, '약정/관리주기 : ' + p.term,
+    '기타사항: 반값할인or패키지15퍼할인or타사보상 여부',
+  ].join('\n');
+  addMsg('<div class="formtxt">' + esc(txt) + '</div><button class="copybtn copytext">📄 양식 복사</button>', 'bot');
+}
+
+function openFormFull(s, ri) {
   const p = productInfo(s, ri), id = 'f' + (++FORM_SEQ);
   FORMS[id] = p;
   const row = (label, ctrl, req) => '<label class="' + (req ? 'req' : '') + '">' + esc(label) + '</label>' + ctrl;
@@ -868,6 +889,14 @@ chat.addEventListener('click', e => {
   if (fb) { openForm(fb.dataset.s, +fb.dataset.i); return; }
   const cf = e.target.closest('button.copyform');
   if (cf) { copyForm(cf.dataset.form, cf); return; }
+  const ct = e.target.closest('button.copytext');
+  if (ct) {
+    const txt = ct.closest('.msg').querySelector('.formtxt').textContent;
+    const done = () => { ct.textContent = '✅ 복사 완료!'; };
+    const fb2 = () => { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (err) {} ta.remove(); done(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fb2); else fb2();
+    return;
+  }
   const ap = e.target.closest('button.apply');
   if (ap) {
     const ti = +ap.dataset.t;
