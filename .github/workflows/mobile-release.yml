@@ -1,0 +1,54 @@
+name: Mobile Release
+
+# Runs when a tag like v1.2.0 is pushed, or by hand from the Actions tab.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        type: choice
+        options: [all, android, ios]
+        default: all
+      submit:
+        description: 'Send the build to Play Console (internal) / TestFlight'
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check EXPO_TOKEN
+        working-directory: .
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing. See mobile/RELEASE.md."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      - run: npm run check
+      - name: Build (and submit)
+        run: |
+          PLATFORM="${{ inputs.platform || 'all' }}"
+          SUBMIT="${{ github.event_name == 'push' || inputs.submit }}"
+          ARGS="--platform $PLATFORM --profile production --non-interactive --no-wait"
+          if [ "$SUBMIT" = "true" ]; then ARGS="$ARGS --auto-submit"; fi
+          eas build $ARGS
